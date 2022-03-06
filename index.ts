@@ -1,8 +1,7 @@
 // @ts-ignore no types publicly available
-import ytch from 'yt-channel-info'
-import { readFile } from 'fs';
+import ytch from 'yt-channel-info';
 import SpotifyWebApi from 'spotify-web-api-node';
-import { writeFile } from 'fs/promises';
+import { writeFile, readFile } from 'fs/promises';
 
 interface ytchResponse {
 	channelIdType: number;
@@ -38,20 +37,22 @@ interface Config {
 	youtubeChannelId: string;
 	spotifyPlaylistId: string;
 	spotifyAccesToken: string;
-	addedSongs: string[];
 }
 
 const spotifyApi = new SpotifyWebApi();
 
 async function main() {
-	const config: Config = await new Promise((resolve, reject) => {
-		readFile('./config.json', (err, data) => {
-			if (err) {
-				return reject(err);
-			}
-			return resolve(JSON.parse(data.toString()));
-		});
-	});
+	let config: Config;
+
+	if (process.env.youtubeChannelId !== undefined && process.env.spotifyPlaylistId !== undefined && process.env.spotifyAccesToken !== undefined) {
+		config = {
+			youtubeChannelId: process.env.youtubeChannelId,
+			spotifyPlaylistId: process.env.spotifyPlaylistId,
+			spotifyAccesToken: process.env.spotifyAccesToken
+		}
+	} else {
+		config = JSON.parse(await readFile('./config.json', 'utf8'));
+	}
 
 	const payload = {
 		channelId: config.youtubeChannelId, // Required
@@ -70,6 +71,8 @@ async function main() {
 	// }
 	// return;
 
+	const addedSongs = await (await spotifyApi.getPlaylistTracks(config.spotifyPlaylistId, { fields: 'items' })).body.items.map(item => item.track.uri);
+
 	const response: ytchResponse = await ytch.getChannelVideos(payload);
 
 	if (response.alertMessage) {
@@ -77,17 +80,11 @@ async function main() {
 		return;
 	}
 
-	const newSongs: string[] = [];
 	const newSongUris: string[] = [];
 
 	for (let i = 0; i < response.items.length; i++) {
 		const video = response.items[i];
 		console.log(video.title);
-
-		if (config.addedSongs.includes(video.title)) {
-			console.log('Reached an upload that was already uploaded, skipping the rest');
-			break;
-		}
 
 		let title = video.title;
 		const bracketLocation = title.indexOf('(');
@@ -97,7 +94,6 @@ async function main() {
 		}
 
 		title = title.replace(' -', '');
-		newSongs.push(video.title);
 		// const [artist, song] = title.split('-').map(str => str.trim());
 
 		// get song from spotify
@@ -112,6 +108,12 @@ async function main() {
 			console.error(`No results on spotify for ${title}`);
 			continue;
 		}
+
+		if (addedSongs.includes(track.uri)) {
+			console.log('Reached an upload that was already uploaded, skipping the rest');
+			break;
+		}
+
 		newSongUris.push(track.uri);
 	}
 
@@ -121,9 +123,6 @@ async function main() {
 	}
 	// add to playlist
 	await spotifyApi.addTracksToPlaylist(config.spotifyPlaylistId, newSongUris, { position: 0 });
-	config.addedSongs.unshift(...newSongs);
-
-	await writeFile('./config.json', JSON.stringify(config, undefined, 2));
 }
 
 main().catch(console.error);
