@@ -1,0 +1,6 @@
+{
+  "youtubeChannelId": "<search for 'youtube channel id finder'>",
+  "spotifyPlaylistId": "<your spotify playlist id, get this from the browser url after opening the playlist>",
+  "spotifyAccesToken": "<your spotify acces token>",
+  "addedSongs": []
+}
