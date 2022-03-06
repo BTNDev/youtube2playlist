@@ -1,7 +1,7 @@
 // @ts-ignore no types publicly available
 import ytch from 'yt-channel-info';
 import SpotifyWebApi from 'spotify-web-api-node';
-import { writeFile, readFile } from 'fs/promises';
+import { readFile } from 'fs/promises';
 
 interface ytchResponse {
 	channelIdType: number;
@@ -80,21 +80,28 @@ async function main() {
 		return;
 	}
 
-	const newSongUris: string[] = [];
+	let missing = 0;
 
 	for (let i = 0; i < response.items.length; i++) {
 		const video = response.items[i];
-		console.log(video.title);
 
 		let title = video.title;
-		const bracketLocation = title.indexOf('(');
 
-		if (bracketLocation > 0) {
-			title = video.title.slice(0, bracketLocation).trimEnd();
-		}
+		// remove brackets (eg. artist - songname (official music video))
+		title = title.replace(/ \(.+\)/g, '');
+
+		// remove feat (eg. artist - songname ft. other artist)
+		title = title.replace(/ ft\. .+?$/g, '');
+
+		// remove feat (artist & other artist - songname)
+		title = title.replace(/ & .+?[-]/g, '');
+
+		// remove feat (artist x other artist - songname)
+		title = title.replace(/ x .+?[-]/g, '');
 
 		title = title.replace(' -', '');
-		// const [artist, song] = title.split('-').map(str => str.trim());
+
+		console.log(`${video.title} ----> ${title}`);
 
 		// get song from spotify
 		const searchResults = await spotifyApi.searchTracks(title);
@@ -105,24 +112,15 @@ async function main() {
 		const track = searchResults.body.tracks?.items[0];
 
 		if (track === undefined) {
-			console.error(`No results on spotify for ${title}`);
+			console.error(`!!! No results on spotify for ${title}`);
+			missing++;
 			continue;
 		}
 
-		if (addedSongs.includes(track.uri)) {
-			console.log('Reached an upload that was already uploaded, skipping the rest');
-			break;
+		if (!addedSongs.includes(track.uri)) {
+			await spotifyApi.addTracksToPlaylist(config.spotifyPlaylistId, [track.uri], { position: i - missing });
 		}
-
-		newSongUris.push(track.uri);
 	}
-
-	if (newSongUris.length === 0) {
-		console.log('No new uploads')
-		return;
-	}
-	// add to playlist
-	await spotifyApi.addTracksToPlaylist(config.spotifyPlaylistId, newSongUris, { position: 0 });
 }
 
 main().catch(console.error);
