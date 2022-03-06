@@ -14,3 +14,8 @@ To run the script you will have to create a config.json file.
 
 The script will update the addedSongs array with the title of the youtube videos which were succesfully added to the playlist. On the next run the script will only add new uploads.
 The first run can only add the latest 30 tracks (this is because the underlying library uses web scraping to get the video titles from a channel, and can only see the first page of uploads).
+
+Running the script (NodeJS and npm required) <br/>
+`npm i` <br/>
+`npx tsc` <br/>
+`node index.js`
